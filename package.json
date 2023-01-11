@@ -8,9 +8,12 @@
     "url": "git@gitlab.axxindata.com:data-engineering/tn3270js.git"
   },
   "scripts": {
-    "prepare": "husky install",
-    "build": "tsc"
+    "prepare": "husky install && npm run build",
+    "build": "tsc -d"
   },
+  "files": [
+    "dist"
+  ],
   "keywords": [],
   "author": "",
   "license": "ISC",
