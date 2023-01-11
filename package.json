@@ -1,6 +1,6 @@
 {
   "name": "tn3270js",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "A TN3270 client library for Node.js",
   "main": "index.js",
   "repository": {
