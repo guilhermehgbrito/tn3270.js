@@ -1,4 +1,4 @@
-import { CodePage, CodePageTranslator } from '../types';
+import type { CodePageTranslator } from '../types';
 
 export class AsciiEbcdicCP37Translator implements CodePageTranslator {
   toEBCDIC(text: string): number[] {

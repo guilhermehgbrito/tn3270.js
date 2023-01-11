@@ -1,4 +1,4 @@
-import { TN3270MessageHeader } from './types';
+import type { TN3270MessageHeader } from './types';
 import { randomUUID } from 'node:crypto';
 
 export class TN3270Message {

@@ -1,4 +1,4 @@
-import { TN3270Field as ITN3270Field, TN3270FieldOptions } from './types';
+import type { TN3270Field as ITN3270Field, TN3270FieldOptions } from './types';
 
 export const BFA_PROTECTED_MASK = 0x20;
 export const BFA_NUMERIC_MASK = 0x10;

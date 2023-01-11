@@ -6,5 +6,6 @@
     "strict": true,
     "strictNullChecks": false,
     "esModuleInterop": true,
+    "outDir": "dist",
   }
 }

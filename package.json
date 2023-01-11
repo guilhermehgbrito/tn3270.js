@@ -2,13 +2,14 @@
   "name": "tn3270js",
   "version": "0.1.0",
   "description": "A TN3270 client library for Node.js",
-  "main": "index.js",
+  "main": "dist/index.js",
   "repository": {
     "type": "git",
     "url": "git@gitlab.axxindata.com:data-engineering/tn3270js.git"
   },
   "scripts": {
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",
