@@ -11,6 +11,7 @@ export const INT_NON_DISPLAY_NOT_LPD = 0x0c;
 
 export class TN3270Field implements ITN3270Field {
   readonly data: number[] = [];
+  private dataBackup: number[] = [];
   public protectedField = false;
   public numeric = false;
   public modified = false;
@@ -25,7 +26,7 @@ export class TN3270Field implements ITN3270Field {
     const attributesNames = ['protectedField', 'numeric', 'modified'];
 
     const isNotSettingAttribute = attributesNames.some(
-      (attribute) => attribute in options
+      (attribute) => !Object.keys(options).includes(attribute)
     );
 
     if (isNotSettingAttribute) this.applyAttributes(this.data[0]);
@@ -51,15 +52,40 @@ export class TN3270Field implements ITN3270Field {
     return this.modified;
   }
 
+  public skip(): boolean {
+    return this.isProtected() && this.isNumeric();
+  }
+
   public appendData(...data: number[]): void {
     this.data.push(...data);
 
     this.applyAttributes(this.data[0]);
   }
 
+  public markAsModified(): void {
+    this.modified = true;
+    this.data[0] |= BFA_MODIFIED_MASK;
+  }
+
+  public markAsUnmodified(): void {
+    this.modified = false;
+    this.data[0] &= ~BFA_MODIFIED_MASK;
+  }
+
   public updateData(data: number[], offset = 0): void {
+    this.dataBackup = [...this.data];
+
     this.data.splice(offset, data.length, ...data);
 
+    this.markAsModified();
+
     if (offset === 0) this.applyAttributes(this.data[0]);
+  }
+
+  public resetData(): void {
+    this.data.splice(0, this.data.length, ...this.dataBackup);
+
+    this.applyAttributes(this.data[0]);
+    this.markAsUnmodified();
   }
 }
