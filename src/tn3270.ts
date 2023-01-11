@@ -1,6 +1,6 @@
 import type {
   AllOptions,
-  Logger,
+  Logger as ILogger,
   TN3270Options,
   TN3270OrderNode,
   DeviceType,
@@ -10,12 +10,14 @@ import type {
   CodePageOutputEncoding,
   CodePageTranslatorRegistry,
   OrderNodeClassRegistry,
+  TN3270Events,
 } from './types';
 import { Lock } from './lock';
 import {
   SetBufferAddressNode,
   StartFieldNode,
   InsertCursorNode,
+  RepeatToAddressNode,
 } from './nodes';
 import { Socket } from 'net';
 import { InvalidOptionError } from './errors';
@@ -30,14 +32,19 @@ import {
   TN3270ReasonCodesText,
   TN3270TelnetCommands,
   TN3270TelnetOptions,
+  AID,
 } from './common/enums';
 import { AsciiEbcdicCP37Translator } from './translate/ascii-ebcdic-cp-37.translator';
 import { TN3270Message } from './tn3270-message';
-export class TN3270 {
+import EventEmitter from 'events';
+import { Logger } from './logger';
+
+export class TN3270 extends EventEmitter {
   readonly host: string;
   readonly port: number;
   readonly deviceType: DeviceType = 'IBM-3278-2-E';
   readonly screen: TN3270Screen;
+  public aid = AID.NO_AID;
   private currentState: States = States.DISCONNECTED;
   private socket: Socket;
   private _deviceName = '';
@@ -45,7 +52,7 @@ export class TN3270 {
   private receivedBuffer: Buffer;
   private outputBuffer: Buffer;
   private keyboardLocked = false;
-  private logger: Logger;
+  private logger: ILogger;
   private lock: Lock;
   private sequenceNumber = 0;
   private messageQueue: TN3270Message[] = [];
@@ -59,9 +66,10 @@ export class TN3270 {
     codePage,
     deviceType,
     port = 23,
-    logger = console,
+    logger,
     lockTimeout = 30000,
   }: TN3270Options) {
+    super({ captureRejections: true });
     if (!host) throw new InvalidOptionError('host', host);
     if (!this.isValidDeviceType(deviceType))
       throw new InvalidOptionError('deviceType', deviceType);
@@ -70,7 +78,7 @@ export class TN3270 {
 
     this.host = host;
     this.port = port;
-    this.logger = logger;
+    this.logger = logger ?? new Logger(TN3270.name);
     this.deviceType = deviceType ?? this.deviceType;
 
     this.socket = new Socket();
@@ -83,7 +91,6 @@ export class TN3270 {
 
     this.screen = new TN3270Screen({
       model,
-      logger,
       codePageTranslator,
     });
 
@@ -160,6 +167,16 @@ export class TN3270 {
           this.processEraseWrite(message.data);
           break;
         }
+        case TN3270Operations.RB:
+        case TN3270Operations.RB_SNA: {
+          this.processReadBuffer();
+          break;
+        }
+        case TN3270Operations.RM:
+        case TN3270Operations.RM_SNA: {
+          this.processReadModified();
+          break;
+        }
         default:
           this.logger.error(`Unhandled operation: ${operation}`);
           this.disconnect();
@@ -172,8 +189,32 @@ export class TN3270 {
     }
   }
 
+  public processReadBuffer(): void {
+    this.writeTN3270(
+      Buffer.from([
+        this.aid,
+        ...this.screen.encodeAddress(this.screen.cursorAddress),
+        ...this.screen.readBuffer(),
+      ])
+    );
+  }
+
+  public processReadModified(): void {
+    this.writeTN3270(
+      Buffer.from([
+        this.aid,
+        ...this.screen.encodeAddress(this.screen.cursorAddress),
+        ...this.screen.readModified(),
+      ])
+    );
+  }
+
   public deviceTypeInBytes(): number[] {
     return this.deviceType.split('').map((v) => v.charCodeAt(0));
+  }
+
+  public deviceNameInBytes(): number[] {
+    return this.deviceName.split('').map((v) => v.charCodeAt(0));
   }
 
   public resetHostOptions(): void {
@@ -213,6 +254,7 @@ export class TN3270 {
     this.socket = new Socket();
     this.setSocketListeners();
     this.resetHostOptions();
+    this.emit('close');
   }
 
   public isValidDeviceType(deviceType: string): deviceType is DeviceType {
@@ -240,6 +282,13 @@ export class TN3270 {
   }
 
   public writeRaw(data: Buffer): void {
+    this.logger.debug(
+      `Writing raw data:`,
+      [...data]
+        .map((v) => (v < 15 ? `0${v.toString(16)}` : v.toString(16)))
+        .join('')
+    );
+
     this.socket.write(data);
   }
 
@@ -257,6 +306,46 @@ export class TN3270 {
     this.writeRaw(this.outputBuffer);
   }
 
+  public sendPF(pf: number): void {
+    if (pf < 1 || pf > 24) {
+      this.logger.error(`Invalid PF key: ${pf}`);
+      return;
+    }
+
+    const PFS = [
+      AID.PF1,
+      AID.PF2,
+      AID.PF3,
+      AID.PF4,
+      AID.PF5,
+      AID.PF6,
+      AID.PF7,
+      AID.PF8,
+      AID.PF9,
+      AID.PF10,
+      AID.PF11,
+      AID.PF12,
+      AID.PF13,
+      AID.PF14,
+      AID.PF15,
+      AID.PF16,
+      AID.PF17,
+      AID.PF18,
+      AID.PF19,
+      AID.PF20,
+      AID.PF21,
+      AID.PF22,
+      AID.PF23,
+      AID.PF24,
+    ];
+
+    this.sendAID(PFS[pf - 1]);
+  }
+
+  public sendEnter(): void {
+    this.sendAID(AID.ENTER, this.screen.readAllModified());
+  }
+
   public toJSON(): any {
     return {
       deviceType: this.deviceType,
@@ -268,10 +357,35 @@ export class TN3270 {
     };
   }
 
+  public on(event: TN3270Events, listener: (...args: any[]) => void): this {
+    return super.on(event, listener);
+  }
+
+  public once(event: TN3270Events, listener: (...args: any[]) => void): this {
+    return super.once(event, listener);
+  }
+
+  public off(event: TN3270Events, listener: (...args: any[]) => void): this {
+    return super.off(event, listener);
+  }
+
+  private sendAID(aid: AID, data?: number[]): void {
+    this.aid = aid;
+
+    this.writeTN3270(
+      Buffer.from([
+        this.aid,
+        ...this.screen.encodeAddress(this.screen.cursorAddress),
+        ...(data || []),
+      ])
+    );
+  }
+
   private registerDefaultOrderNodeClasses() {
     this.registerOrderNodeClass(TN3270Orders.SF, StartFieldNode);
     this.registerOrderNodeClass(TN3270Orders.SBA, SetBufferAddressNode);
     this.registerOrderNodeClass(TN3270Orders.IC, InsertCursorNode);
+    this.registerOrderNodeClass(TN3270Orders.RA, RepeatToAddressNode);
   }
 
   private increaseSequenceNumber() {
@@ -279,7 +393,7 @@ export class TN3270 {
   }
 
   private setState(state: States) {
-    this.logger.debug(`State changed from ${this.currentState} to ${state}`);
+    this.logger.debug(`State changed from ${this.currentState} to ${state} `);
     this.currentState = state;
   }
 
@@ -292,13 +406,18 @@ export class TN3270 {
 
   private handleSocketConnect() {
     this.currentState = States.CONNECTED;
+    this.emit('socket-connect');
   }
 
   private handleSocketData(data: Buffer): void {
     this.receivedBuffer = Buffer.from(data);
+    this.emit('data', this.receivedBuffer);
 
     this.lock.acquireAsync().then(() => {
-      const isData = States.ST_DS_TN3270_DATA === this.currentState;
+      const isData = [
+        States.ST_DS_TN3270_DATA,
+        States.ST_DS_TN3270_DATA_IAC,
+      ].includes(this.currentState);
 
       if (isData) this.processDataStream(this.receivedBuffer);
       else this.processPacket(this.receivedBuffer);
@@ -423,6 +542,12 @@ export class TN3270 {
             [TelnetProtocolCommands.IAC]: () => this.setState(States.ST_IAC),
           };
 
+          const hasDeviceName = this.deviceName.length > 0;
+
+          const deviceNameConnect = hasDeviceName
+            ? [TN3270TelnetCommands.CONNECT, ...this.deviceNameInBytes()]
+            : [];
+
           this.writeRaw(
             Buffer.from([
               TelnetProtocolCommands.IAC,
@@ -431,6 +556,7 @@ export class TN3270 {
               TN3270TelnetCommands.DEVICE_TYPE,
               TN3270TelnetCommands.REQUEST,
               ...this.deviceTypeInBytes(),
+              ...deviceNameConnect,
               TelnetProtocolCommands.IAC,
               TelnetProtocolCommands.SE,
             ])
@@ -471,7 +597,7 @@ export class TN3270 {
         }
         case States.ST_SB_TN3270E_DEVICE_TYPE_REJECT_REASON: {
           this.logger.error(
-            `Device type rejected: ${TN3270ReasonCodesText[byte]}`
+            `Device type rejected: ${TN3270ReasonCodesText[byte]} `
           );
           this.setState(States.DISCONNECTED);
           return;
@@ -537,14 +663,12 @@ export class TN3270 {
           break;
         }
         case States.NEGOTIATED: {
+          this.emit('connect');
           this.setState(States.ST_DS_TN3270_DATA);
           break;
         }
-        case States.ST_DS_TN3270_DATA: {
-          return this.processDataStream(data.subarray(offset));
-        }
         default:
-          this.logger.error(`Unhandled state: ${this.currentState}`);
+          this.logger.error(`Unhandled state: ${this.currentState} `);
           this.disconnect();
           return;
       }
@@ -570,7 +694,7 @@ export class TN3270 {
 
     for (const byte of data) {
       switch (this.currentState) {
-        case States.ST_IAC: {
+        case States.ST_DS_TN3270_DATA_IAC: {
           const iacHandlers = {
             [TelnetProtocolCommands.IAC]: () => {
               currentMessage.pushByte(byte);
@@ -588,14 +712,14 @@ export class TN3270 {
         }
         case States.ST_DS_TN3270_DATA: {
           if (byte === TelnetProtocolCommands.IAC) {
-            this.setState(States.ST_IAC);
+            this.setState(States.ST_DS_TN3270_DATA_IAC);
             break;
           }
           currentMessage.pushByte(byte);
           break;
         }
         default:
-          this.logger.error(`Unhandled state: ${this.currentState}`);
+          this.logger.error(`Unhandled state: ${this.currentState} `);
           this.disconnect();
           return;
       }
@@ -607,8 +731,20 @@ export class TN3270 {
 
   private applyWCC(wcc: number): void {
     const unlockKeyboard = (wcc & 2) === 2;
+    const resetModifed = (wcc & 1) === 1;
 
-    if (unlockKeyboard) this.keyboardLocked = false;
+    if (unlockKeyboard) this.unlockKeyboard();
+    if (resetModifed) this.screen.resetModified();
+  }
+
+  private unlockKeyboard(): void {
+    this.keyboardLocked = false;
+    this.emit('keyboard-unlock');
+  }
+
+  private lockKeyboard(): void {
+    this.keyboardLocked = true;
+    this.emit('keyboard-lock');
   }
 
   private processWriteStructuredField(data: number[]): void {
@@ -641,7 +777,7 @@ export class TN3270 {
           break;
         }
         default:
-          this.logger.error(`Unhandled structured field: ${id}`);
+          this.logger.error(`Unhandled structured field: ${id} `);
           this.disconnect();
       }
     }
@@ -653,6 +789,7 @@ export class TN3270 {
 
   private processEraseWrite(data: number[]): void {
     this.screen.eraseAll();
+    this.aid = AID.NO_AID;
     this.processTN3270Data(data);
   }
 
@@ -671,14 +808,16 @@ export class TN3270 {
     }
 
     for (const node of nodes) node.execute(this.screen);
+
+    if (nodes.length > 0) this.emit('screen-update');
   }
 
   private handleSocketError(error: Error): void {
-    console.log('error', error);
+    this.emit('socket-error', error);
   }
 
   private handleSocketClose(): void {
-    console.log('close');
+    this.emit('socket-close');
     this.reset();
   }
 
@@ -686,7 +825,7 @@ export class TN3270 {
     const handler = handlers[byte];
 
     if (!handler) {
-      this.logger.error(`Invalid negotiation, invalid command ${byte}`);
+      this.logger.error(`Invalid negotiation, invalid command ${byte} `);
       return;
     }
 
@@ -697,12 +836,12 @@ export class TN3270 {
     this.writeTN3270(
       Buffer.from(
         `88000e81808081848586878895a1a60017818101000050001801000a0
-    2e50002006f090c07800008818400078000001b81858200090c000000
-    000700100002b900250110f103c3013600268186001000f4f1f1f2f2f
-    3f3f4f4f5f5f6f6f7f7f8f8f9f9fafafbfbfcfcfdfdfefeffffffff00
-    0f81870500f0f1f1f2f2f4f4f8f800078188000102000c81950000100
-    010000101001281a1000000000000000006a3f3f2f7f0001181a6000
-    00b01000050001800500018ffef`.replace(/\s/g, ''),
+2e50002006f090c07800008818400078000001b81858200090c000000
+000700100002b900250110f103c3013600268186001000f4f1f1f2f2f
+3f3f4f4f5f5f6f6f7f7f8f8f9f9fafafbfbfcfcfdfdfefeffffffff00
+0f81870500f0f1f1f2f2f4f4f8f800078188000102000c81950000100
+010000101001281a1000000000000000006a3f3f2f7f0001181a6000
+00b01000050001800500018ffef`.replace(/\s/g, ''),
         'hex'
       )
     );

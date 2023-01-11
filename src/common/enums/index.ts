@@ -12,3 +12,4 @@ export * from './tn3270-field-colors.enum';
 export * from './telnet-protocol-options.enum';
 export * from './tn3270-functions.enum';
 export * from './tn3270-telnet-options.enum';
+export * from './aid.enum';
