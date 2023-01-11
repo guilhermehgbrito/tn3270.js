@@ -10,6 +10,6 @@ export class SetBufferAddressNode implements TN3270OrderNode {
   execute(screen: TN3270Screen) {
     const address = screen.decodeAddress(this.data as EncodedAddress);
 
-    screen.setBufferAddress(address);
+    screen.setBufferAddress(screen.addToAddress(1, address));
   }
 }

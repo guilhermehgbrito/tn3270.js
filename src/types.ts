@@ -38,6 +38,7 @@ export interface TN3270Options {
   host: string;
   port?: number;
   deviceType?: DeviceType;
+  deviceName?: string;
   codePage?: CodePageOutputEncoding;
   logger?: Logger;
   lockTimeout?: number;
@@ -50,9 +51,13 @@ export interface TN3270ScreenOptions {
 }
 
 export interface TN3270Screen {
+  screenSize: number;
   bufferAddress: number;
   cursorAddress: number;
+  addToAddress(amount: number, address: number): number;
+  subtractFromAddress(amount: number, address: number): number;
   addField(field: TN3270Field): void;
+  distanceInBytes(addressStart: number, addressEnd: number): number;
   removeField(field: TN3270Field): void;
   getFields(): TN3270Field[];
   toString(): string;
@@ -96,9 +101,13 @@ export interface CodePageTranslator {
 }
 
 export interface TN3270Field {
+  data: number[];
+  addressStart: number;
+  addressEnd: number;
   isNumeric(): boolean;
   isProtected(): boolean;
   isModified(): boolean;
+  skip(): boolean;
   appendData(...data: number[]): void;
   updateData(data: number[], offset?: number): void;
 }
@@ -123,3 +132,15 @@ export type CodePageTranslatorRegistry = Registry<
   CodePageOutputEncoding,
   CodePageTranslator
 >;
+
+export type TN3270Events =
+  | 'socket-connect'
+  | 'socket-close'
+  | 'socket-error'
+  | 'screen-update'
+  | 'data'
+  | 'close'
+  | 'error'
+  | 'connect'
+  | 'keyboard-lock'
+  | 'keyboard-unlock';
