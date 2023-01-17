@@ -810,9 +810,13 @@ export class TN3270 extends EventEmitter {
       node?.appendData(byte);
     }
 
-    for (const node of nodes) node.execute(this.screen);
+    if (nodes.length > 0) {
+      this.screen.newScreen();
 
-    if (nodes.length > 0) this.emit('screen-update');
+      for (const node of nodes) node.execute(this.screen);
+
+      this.emit('screen-update');
+    }
   }
 
   private handleSocketError(error: Error): void {

@@ -17,6 +17,7 @@ export class TN3270Field implements ITN3270Field {
   public modified = false;
   public addressStart: number;
   public addressEnd: number;
+  public screen: number;
 
   constructor({ data, ...options }: TN3270FieldOptions) {
     this.data.push(...data);
