@@ -667,6 +667,9 @@ export class TN3270 extends EventEmitter {
           this.setState(States.ST_DS_TN3270_DATA);
           break;
         }
+        case States.ST_DS_TN3270_DATA: {
+          return this.processDataStream(data.subarray(offset));
+        }
         default:
           this.logger.error(`Unhandled state: ${this.currentState} `);
           this.disconnect();
