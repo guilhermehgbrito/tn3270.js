@@ -68,6 +68,7 @@ export interface TN3270Screen {
   addressToRowColumn(address: number): { row: number; column: number };
   setBufferAddress(address: number): void;
   setCursorAddress(address: number): void;
+  newScreen(): void;
   writeString(text: string): void;
 }
 

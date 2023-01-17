@@ -27,6 +27,7 @@ const ADDRESS_CODE_TABLE = [
 ];
 
 export class TN3270Screen implements ITN3270Screen {
+  private screenCount = 0;
   private logger: ILogger;
   private fields: TN3270Field[] = [];
   private _bufferAddress = 0;
@@ -43,6 +44,10 @@ export class TN3270Screen implements ITN3270Screen {
 
     this.codePageTranslator = options.codePageTranslator;
     this.logger = options.logger ?? new Logger(TN3270Screen.name);
+  }
+
+  public newScreen(): void {
+    this.screenCount += 1;
   }
 
   public get bufferAddress(): number {
@@ -90,6 +95,7 @@ export class TN3270Screen implements ITN3270Screen {
     }
 
     field.addressStart = this.bufferAddress;
+    field.screen = this.screenCount;
 
     this.fields.push(field);
 
@@ -257,6 +263,10 @@ export class TN3270Screen implements ITN3270Screen {
     }
   }
 
+  public getCurrentScreenFields(): TN3270Field[] {
+    return this.fields.filter((f) => f.screen === this.screenCount);
+  }
+
   public eraseAll(): void {
     this.fields.splice(0, this.fields.length);
   }
@@ -266,7 +276,7 @@ export class TN3270Screen implements ITN3270Screen {
   }
 
   public readBuffer(): number[] {
-    return this.fields.flatMap((f) => [
+    return this.getCurrentScreenFields().flatMap((f) => [
       TN3270Orders.SBA,
       ...this.encodeAddress(f.addressStart),
       TN3270Orders.SF,
@@ -275,7 +285,7 @@ export class TN3270Screen implements ITN3270Screen {
   }
 
   public readModified(): number[] {
-    return this.fields
+    return this.getCurrentScreenFields()
       .filter((f) => f.isModified())
       .flatMap((f) => [
         TN3270Orders.SBA,
@@ -285,7 +295,7 @@ export class TN3270Screen implements ITN3270Screen {
   }
 
   public readAllUnprotected(): number[] {
-    return this.fields
+    return this.getCurrentScreenFields()
       .filter((f) => !f.isProtected())
       .flatMap((f) => [
         TN3270Orders.SBA,
@@ -295,7 +305,7 @@ export class TN3270Screen implements ITN3270Screen {
   }
 
   public readAllModified(): number[] {
-    return this.fields
+    return this.getCurrentScreenFields()
       .filter((f) => f.isModified())
       .flatMap((f) => [
         TN3270Orders.SBA,
