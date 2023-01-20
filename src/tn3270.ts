@@ -278,6 +278,7 @@ export class TN3270 extends EventEmitter {
 
   public disconnect(): void {
     this.currentState = States.DISCONNECTED;
+    this._deviceName = '';
     this.socket.destroy();
   }
 
