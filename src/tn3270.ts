@@ -599,7 +599,7 @@ export class TN3270 extends EventEmitter {
           this.logger.error(
             `Device type rejected: ${TN3270ReasonCodesText[byte]} `
           );
-          this.setState(States.DISCONNECTED);
+          this.disconnect();
           return;
         }
         case States.ST_SB_CONNECT: {
