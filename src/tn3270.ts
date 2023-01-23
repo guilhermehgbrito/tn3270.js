@@ -340,7 +340,7 @@ export class TN3270 extends EventEmitter {
       AID.PF24,
     ];
 
-    this.sendAID(PFS[pf - 1]);
+    this.sendAID(PFS[pf - 1], this.screen.readAllModified());
   }
 
   public sendEnter(): void {
