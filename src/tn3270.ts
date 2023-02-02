@@ -247,7 +247,7 @@ export class TN3270 extends EventEmitter {
     }, {} as any);
   }
 
-  public reset(): void {
+  public disconnect(): void {
     this.currentState = States.DISCONNECTED;
     this.socket.destroy();
 
@@ -274,12 +274,6 @@ export class TN3270 extends EventEmitter {
 
   public connect(): void {
     this.socket.connect(this.port, this.host);
-  }
-
-  public disconnect(): void {
-    this.currentState = States.DISCONNECTED;
-    this._deviceName = '';
-    this.socket.destroy();
   }
 
   public writeRaw(data: Buffer): void {
@@ -826,7 +820,7 @@ export class TN3270 extends EventEmitter {
 
   private handleSocketClose(): void {
     this.emit('socket-close');
-    this.reset();
+    this.disconnect();
   }
 
   private handle(handlers: Record<number, () => void>, byte: number): void {
