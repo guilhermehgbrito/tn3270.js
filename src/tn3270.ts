@@ -823,6 +823,7 @@ export class TN3270 extends EventEmitter {
     this.currentState = States.DISCONNECTED;
     if (!this.socket.destroyed) this.socket.destroy();
 
+    this.socket.removeAllListeners();
     this.socket = new Socket();
     this.setSocketListeners();
     this.resetHostOptions();
