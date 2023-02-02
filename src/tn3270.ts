@@ -92,6 +92,7 @@ export class TN3270 extends EventEmitter {
     this.screen = new TN3270Screen({
       model,
       codePageTranslator,
+      logger: this.logger,
     });
 
     this.registerDefaultOrderNodeClasses();
@@ -248,12 +249,7 @@ export class TN3270 extends EventEmitter {
   }
 
   public disconnect(): void {
-    this.currentState = States.DISCONNECTED;
-    this.socket.destroy();
-
-    this.socket = new Socket();
-    this.setSocketListeners();
-    this.resetHostOptions();
+    this._disconnect();
     this.emit('close');
   }
 
@@ -820,7 +816,16 @@ export class TN3270 extends EventEmitter {
 
   private handleSocketClose(): void {
     this.emit('socket-close');
-    this.disconnect();
+    this._disconnect();
+  }
+
+  private _disconnect(): void {
+    this.currentState = States.DISCONNECTED;
+    this.socket.destroy();
+
+    this.socket = new Socket();
+    this.setSocketListeners();
+    this.resetHostOptions();
   }
 
   private handle(handlers: Record<number, () => void>, byte: number): void {
