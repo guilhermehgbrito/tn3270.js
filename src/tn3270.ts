@@ -92,6 +92,7 @@ export class TN3270 extends EventEmitter {
     this.screen = new TN3270Screen({
       model,
       codePageTranslator,
+      logger: this.logger,
     });
 
     this.registerDefaultOrderNodeClasses();
