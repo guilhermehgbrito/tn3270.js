@@ -180,6 +180,7 @@ export class TN3270 extends EventEmitter {
         }
         default:
           this.logger.error(`Unhandled operation: ${operation}`);
+          this.emit('error', new Error(`Unhandled operation: ${operation}`));
           this.disconnect();
       }
 
@@ -300,6 +301,7 @@ export class TN3270 extends EventEmitter {
   public sendPF(pf: number): void {
     if (pf < 1 || pf > 24) {
       this.logger.error(`Invalid PF key: ${pf}`);
+      this.emit('error', new Error(`Invalid PF key: ${pf}`));
       return;
     }
 
@@ -587,9 +589,9 @@ export class TN3270 extends EventEmitter {
           break;
         }
         case States.ST_SB_TN3270E_DEVICE_TYPE_REJECT_REASON: {
-          this.logger.error(
-            `Device type rejected: ${TN3270ReasonCodesText[byte]} `
-          );
+          const errorMessage = `Device type rejected: ${TN3270ReasonCodesText[byte]}`;
+          this.logger.error(errorMessage);
+          this.emit('error', new Error(errorMessage));
           this.disconnect();
           return;
         }
@@ -663,6 +665,10 @@ export class TN3270 extends EventEmitter {
         }
         default:
           this.logger.error(`Unhandled state: ${this.currentState} `);
+          this.emit(
+            'error',
+            new Error(`Unhandled state: ${this.currentState}`)
+          );
           this.disconnect();
           return;
       }
@@ -714,6 +720,10 @@ export class TN3270 extends EventEmitter {
         }
         default:
           this.logger.error(`Unhandled state: ${this.currentState} `);
+          this.emit(
+            'error',
+            new Error(`Unhandled state: ${this.currentState}`)
+          );
           this.disconnect();
           return;
       }
@@ -763,6 +773,7 @@ export class TN3270 extends EventEmitter {
 
           if (iac !== TelnetProtocolCommands.IAC) {
             this.logger.error('Invalid read partition suboption');
+            this.emit('error', new Error('Invalid read partition suboption'));
             this.setState(States.DISCONNECTED);
             return;
           }
@@ -772,6 +783,7 @@ export class TN3270 extends EventEmitter {
         }
         default:
           this.logger.error(`Unhandled structured field: ${id} `);
+          this.emit('error', new Error(`Unhandled structured field: ${id}`));
           this.disconnect();
       }
     }
@@ -823,10 +835,13 @@ export class TN3270 extends EventEmitter {
     this.currentState = States.DISCONNECTED;
     if (!this.socket.destroyed) this.socket.destroy();
 
-    this.socket.removeAllListeners();
-    this.socket = new Socket();
-    this.setSocketListeners();
+    this._deviceName = '';
     this.resetHostOptions();
+    this.resetMessageQueue();
+  }
+
+  private resetMessageQueue(): void {
+    this.messageQueue = [];
   }
 
   private handle(handlers: Record<number, () => void>, byte: number): void {
